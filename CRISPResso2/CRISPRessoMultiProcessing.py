@@ -220,6 +220,13 @@ def run_function_on_array_chunk_parallel(input_array, input_function, n_processe
 def run_subprocess(cmd):
     return sb.call(cmd, shell=True)
 
+
+def track_job(job, update_interval=900):
+    while not job.ready():
+        print("Tasks remaining = {0}".format(
+            job._number_left * job._chunksize), flush=True)
+        time.sleep(update_interval)
+
 def run_parallel_commands(commands_arr,n_processes=1,descriptor='CRISPResso2',continue_on_fail=False):
     """
     input: commands_arr: list of shell commands to run
@@ -232,7 +239,10 @@ def run_parallel_commands(commands_arr,n_processes=1,descriptor='CRISPResso2',co
     signal.signal(signal.SIGINT, original_sigint_handler)
     try:
         res = pool.map_async(run_subprocess, commands_arr)
-        ret_vals = res.get(60*60*60) # Without the timeout this blocking call ignores all signals.
+        progress_thread = mp.Process(target=track_job, args=res)
+        progress_thread.start()
+        ret_vals = res.get(60*60*6) # Without the timeout this blocking call ignores all signals.
+        progress_thread.terminate()
         for idx, ret in enumerate(ret_vals):
             if ret == 137:
                 raise Exception('%s #%d was killed by your system. Please decrease the number of processes (-p) and run again.'%(descriptor, idx))
