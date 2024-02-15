@@ -1051,12 +1051,15 @@ def main():
 
                 # first get rid of all files in the output directory
                 if os.path.exists(MAPPED_REGIONS):
-                    info('Deleting partially-completed demultiplexing in %s...'%MAPPED_REGIONS)
-                    cmd = "rm -rf %s" % MAPPED_REGIONS
-                    p = sb.call(cmd, shell=True)
+                    info('Code has been changed from the real 2.1.12 version, not removing MAPPED_REGIONS files')
+#                    info('Deleting partially-completed demultiplexing in %s...'%MAPPED_REGIONS)
+#                    info('Deleting partially-completed demultiplexing in %s...'%MAPPED_REGIONS)
+#                    cmd = "rm -rf %s" % MAPPED_REGIONS
+#                    p = sb.call(cmd, shell=True)
 
                 # make the output directory
-                os.mkdir(MAPPED_REGIONS)
+                if not os.path.exists(MAPPED_REGIONS):
+                    os.mkdir(MAPPED_REGIONS)
 
                 # if we should only demultiplex where amplicons aligned... (as opposed to the whole genome)
                 if RUNNING_MODE=='AMPLICONS_AND_GENOME' and args.demultiplex_only_at_amplicons:
@@ -1074,8 +1077,6 @@ def main():
                     } ' '''
                     cmd = (s1).replace('__OUTPUTPATH__', MAPPED_REGIONS)
                     cmd = cmd.replace("__MIN_READS__", str(args.min_reads_to_use_region))
-                    with open(REPORT_ALL_DEPTH, 'w') as f:
-                        f.write('chr_id\tstart\tend\tnumber of reads\toutput filename\n')
 
                     info('Preparing to demultiplex reads aligned to positions overlapping amplicons in the genome...')
                     # make command for each amplicon
@@ -1176,20 +1177,29 @@ def main():
                                 chr_output_filename = _jp('MAPPED_REGIONS/%s_%s_%s.info' % (chr_str, curr_pos, curr_end))
                                 sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, curr_end)).replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
                                 chr_commands.append(sub_chr_command)
-                                chr_output_filenames.append(chr_output_filename)
+                                if not os.path.exists(chr_output_filename):
+                                    chr_output_filenames.append(chr_output_filename)
+                                else:
+                                    info(chr_output_filename+" exists, skip")
                                 curr_pos = curr_end
                                 curr_end = curr_pos + chr_step_size
                             if curr_end < chr_len:
                                 chr_output_filename = _jp('MAPPED_REGIONS/%s_%s_%s.info' % (chr_str, curr_pos, chr_len))
                                 sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, chr_len)).replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
-                                chr_commands.append(sub_chr_command)
+                                if not os.path.exists(chr_output_filename):
+                                    chr_commands.append(sub_chr_command)
+                                else:
+                                    info(chr_output_filename+" exists, skip")
                                 chr_output_filenames.append(chr_output_filename)
 
                         else:
                             # otherwise do the whole chromosome
                             chr_output_filename = _jp('MAPPED_REGIONS/%s.info' % (chr_str))
                             sub_chr_command = chr_cmd.replace("__REGION__", "").replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
-                            chr_commands.append(sub_chr_command)
+                            if not os.path.exists(chr_output_filename):
+                                chr_commands.append(sub_chr_command)
+                            else:
+                                info(chr_output_filename+" exists, skip")
                             chr_output_filenames.append(chr_output_filename)
 
                 if args.debug:

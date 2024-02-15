@@ -32,12 +32,6 @@ RUN echo "deb http://httpredir.debian.org/debian buster main contrib" > /etc/apt
 # install crispresso
 COPY . /CRISPResso2
 WORKDIR /CRISPResso2
-RUN python setup.py install \
-  && CRISPResso -h \
-  && CRISPRessoBatch -h \
-  && CRISPRessoPooled -h \
-  && CRISPRessoWGS -h \
-  && CRISPRessoCompare -h
-
+RUN python setup.py install
 
 ENTRYPOINT ["python","/CRISPResso2/CRISPResso2_router.py"]
