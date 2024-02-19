@@ -1244,13 +1244,19 @@ def main():
                     region_files = glob.glob(OUTPUT_DIRECTORY+'/MAPPED_REGIONS/*info')
                     info(str(len(region_files))+" files to go over")
                     # because of chunking sometimes have double values. Skip if this is the case
-                    line_seen = set([])
+                    line_seen = {}
                     for chr_output_filename in region_files:
                         with open(chr_output_filename, 'r') as f_in:
                             for line in f_in:
-                                if line not in line_seen:
-                                    f.write(line)
-                                line_seen.add(line)
+                                spl_line = line.split('\t')
+                                chr_pos = spl_line[0]+'\t'+spl_line[1]+'\t'+spl_line[2]
+                                if chr_pos not in line_seen:
+                                    line_seen[chr_pos] = [spl_line[3], spl_line[4]]
+                                else:
+                                    if int(spl_line[3]) > int(line_seen[chr_pos][0]):
+                                        line_seen[chr_pos][0] = spl_line[3]
+                    for chr_pos in line_seen:
+                        f.write(chr_pos+'\t'+'\t'.join(line_seen[chr_pos]))
 
                 df_all_demux = pd.read_csv(REPORT_ALL_DEPTH, sep='\t')
                 df_all_demux.sort_values(by=['chr_id', 'start'], inplace=True)
