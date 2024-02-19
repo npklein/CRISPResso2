@@ -21,7 +21,6 @@ from CRISPResso2 import CRISPRessoMultiProcessing
 from CRISPResso2.CRISPRessoReports import CRISPRessoReport
 from CRISPResso2 import CRISPRessoPlot
 import traceback
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -570,41 +569,43 @@ def main():
                 max_overlap_string = "--max-overlap " + str(args.max_paired_end_reads_overlap)
             if args.min_paired_end_reads_overlap:
                 min_overlap_string = "--min-overlap " + str(args.min_paired_end_reads_overlap)
-            # Merging with Flash
-            info('Merging paired sequences with Flash...', {'percent_complete': 10})
-            cmd = args.flash_command+' --allow-outies %s %s %s %s -z -d %s >>%s 2>&1' %\
-                (output_forward_paired_filename,
-                 output_reverse_paired_filename,
-                 max_overlap_string,
-                 min_overlap_string,
-                 OUTPUT_DIRECTORY, log_filename)
-
-            if args.debug:
-                info('Flash command: %s'%cmd)
-
-            FLASH_STATUS = sb.call(cmd, shell=True)
-            if FLASH_STATUS:
-                raise FlashException('Flash failed to run, please check the log file.')
 
             flash_hist_filename = _jp('out.hist')
             flash_histogram_filename = _jp('out.histogram')
             flash_not_combined_1_filename = _jp('out.notCombined_1.fastq.gz')
             flash_not_combined_2_filename = _jp('out.notCombined_2.fastq.gz')
-
             processed_output_filename = _jp('out.extendedFrags.fastq.gz')
+            new_merged_filename = _jp('out.forcemerged_uncombined.fastq.gz')
+            new_output_filename = _jp('out.forcemerged.fastq.gz')
+            if os.path.exists(_jp('out.extendedFrags.fastq.gz')):
+                info(_jp('out.extendedFrags.fastq.gz')+" exists, skip flash")
+            else:
+                # Merging with Flash
+                info('Merging paired sequences with Flash...', {'percent_complete': 10})
+                cmd = args.flash_command+' --allow-outies %s %s %s %s -z -d %s >>%s 2>&1' %\
+                    (output_forward_paired_filename,
+                     output_reverse_paired_filename,
+                     max_overlap_string,
+                     min_overlap_string,
+                     OUTPUT_DIRECTORY, log_filename)
 
-            if args.force_merge_pairs:
-                old_flashed_filename = processed_output_filename
-                new_merged_filename = _jp('out.forcemerged_uncombined.fastq.gz')
-                num_reads_force_merged = CRISPRessoShared.force_merge_pairs(flash_not_combined_1_filename, flash_not_combined_2_filename, new_merged_filename)
-                new_output_filename = _jp('out.forcemerged.fastq.gz')
-                merge_command = "cat %s %s > %s"%(processed_output_filename, new_merged_filename, new_output_filename)
-                MERGE_STATUS = sb.call(merge_command, shell=True)
-                if MERGE_STATUS:
-                    raise FlashException('Force-merging read pairs failed to run, please check the log file.')
-                processed_output_filename = new_output_filename
+                if args.debug:
+                    info('Flash command: %s'%cmd)
 
-            info('Done!')
+                FLASH_STATUS = sb.call(cmd, shell=True)
+                if FLASH_STATUS:
+                    raise FlashException('Flash failed to run, please check the log file.')
+
+                if args.force_merge_pairs:
+                    old_flashed_filename = processed_output_filename
+                    num_reads_force_merged = CRISPRessoShared.force_merge_pairs(flash_not_combined_1_filename, flash_not_combined_2_filename, new_merged_filename)
+                    merge_command = "cat %s %s > %s"%(processed_output_filename, new_merged_filename, new_output_filename)
+                    MERGE_STATUS = sb.call(merge_command, shell=True)
+                    if MERGE_STATUS:
+                        raise FlashException('Force-merging read pairs failed to run, please check the log file.')
+                    processed_output_filename = new_output_filename
+
+                info('Done!')
 
         if can_finish_incomplete_run and 'count_input_reads' in crispresso2_info['running_info']['finished_steps']:
             (N_READS_INPUT, N_READS_AFTER_PREPROCESSING) = crispresso2_info['running_info']['finished_steps']['count_input_reads']
@@ -689,7 +690,6 @@ def main():
                 raise CRISPRessoShared.BadParameterException('Incorrect number of columns provided without header.')
             elif has_header and len(unmatched_headers) > 0:
                 raise CRISPRessoShared.BadParameterException('Unable to match headers: ' + str(unmatched_headers))
-            
             if not has_header:
                 # Default header
                 headers = []
@@ -886,7 +886,6 @@ def main():
             failed_batch_arr = []
             failed_batch_arr_desc = []
             for cmd in crispresso_cmds:
-                
                 # Extract the folder name from the CRISPResso command
                 folder_name_regex = re.search(r'-o\s+\S+\s+--name\s+(\S+)', cmd)
                 if folder_name_regex:
@@ -1153,15 +1152,30 @@ def main():
                             chr_lens[m.group(1)] = int(m.group(2))
 
                     chr_commands = []
-                    chr_output_filenames = []
+                    #chr_output_filenames = []
+
+
+                    # get all the regoin files
+                    info('Getting already processed region files from '+OUTPUT_DIRECTORY+'/MAPPED_REGIONS/')
+                    region_files = glob.glob(OUTPUT_DIRECTORY+'/MAPPED_REGIONS/*info')
+                    processed_regions = {}
+                    info("gotten "+str(len(region_files))+" region files")
+                    for f in region_files:
+                        region = f.replace('.info','').split('/')[-1].split('_')
+                        chr = region[0]
+                        if chr not in processed_regions:
+                            processed_regions[chr] = []
+                        if(len(region)) > 1:
+                            processed_regions[chr].append([int(region[1]), int(region[2])])
+
                     for chr_str in chrs:
                         chr_cmd = cmd.replace('__CHR__', chr_str)
                         # if we have a lot of reads, split up the chrs too
                         # with a step size of 10M, there are about 220 regions in hg19
                         # with a step size of 5M, there are about 368 regions in hg19
-                        chr_step_size = 5000000 #step size for splitting up chrs
+                        chr_step_size = 100000 #step size for splitting up chrs
                         chr_len = chr_lens[chr_str]
-                        if N_READS_ALIGNED > 10000000 and chr_len > chr_step_size*2:
+                        if N_READS_ALIGNED > 10000 and chr_len > chr_step_size*2:
                             curr_pos = 0
                             curr_end = curr_pos + chr_step_size
                             while curr_end < chr_len:
@@ -1174,13 +1188,27 @@ def main():
                                         break
                                     n_reads_at_end = get_n_aligned_bam_region(bam_filename_genome, chr_str, curr_end-5, curr_end+5)
 
-                                chr_output_filename = _jp('MAPPED_REGIONS/%s_%s_%s.info' % (chr_str, curr_pos, curr_end))
-                                sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, curr_end)).replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
-                                chr_commands.append(sub_chr_command)
-                                if not os.path.exists(chr_output_filename):
-                                    chr_output_filenames.append(chr_output_filename)
+                                # in case running with smaller chunks,check if this region is not already done
+                                region_already_run = False
+                                if chr_str in processed_regions:
+                                    if len(processed_regions[chr_str]) == 0:
+                                        region_already_run == True
+                                    else:
+                                        for reg in processed_regions[chr_str]:
+                                            if curr_pos > reg[0] and curr_end < reg[1]:
+                                                region_already_run = True
+                                                break
+
+                                if region_already_run:
+                                    info('Region has already been run, skip')
                                 else:
-                                    info(chr_output_filename+" exists, skip")
+                                    chr_output_filename = _jp('MAPPED_REGIONS/%s_%s_%s.info' % (chr_str, curr_pos, curr_end))
+                                    sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, curr_end)).replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
+                                    if not os.path.exists(chr_output_filename):
+                                        chr_commands.append(sub_chr_command)
+                                    else:
+                                        info(chr_output_filename+" exists, skip")
+                                #chr_output_filenames.append(chr_output_filename)
                                 curr_pos = curr_end
                                 curr_end = curr_pos + chr_step_size
                             if curr_end < chr_len:
@@ -1190,7 +1218,7 @@ def main():
                                     chr_commands.append(sub_chr_command)
                                 else:
                                     info(chr_output_filename+" exists, skip")
-                                chr_output_filenames.append(chr_output_filename)
+                                #chr_output_filenames.append(chr_output_filename)
 
                         else:
                             # otherwise do the whole chromosome
@@ -1200,23 +1228,29 @@ def main():
                                 chr_commands.append(sub_chr_command)
                             else:
                                 info(chr_output_filename+" exists, skip")
-                            chr_output_filenames.append(chr_output_filename)
+                            #chr_output_filenames.append(chr_output_filename)
 
                 if args.debug:
                     demux_file = _jp('DEMUX_COMMANDS.txt')
                     with open(demux_file, 'w') as fout:
                         fout.write("\n\n\n".join(chr_commands))
                     info('Wrote demultiplexing commands to ' + demux_file)
-
+                exit()
                 info('Demultiplexing reads by location (%d genomic regions)...'%len(chr_commands), {'percent_complete': 85})
                 CRISPRessoMultiProcessing.run_parallel_commands(chr_commands, n_processes=n_processes_for_pooled, descriptor='Demultiplexing reads by location', continue_on_fail=args.skip_failed)
 
                 with open(REPORT_ALL_DEPTH, 'w') as f:
                     f.write('chr_id\tstart\tend\tnumber of reads\toutput filename\n')
-                    for chr_output_filename in chr_output_filenames:
+                    region_files = glob.glob(OUTPUT_DIRECTORY+'/MAPPED_REGIONS/*info')
+                    info(str(len(region_files))+" files to go over")
+                    # because of chunking sometimes have double values. Skip if this is the case
+                    line_seen = set([])
+                    for chr_output_filename in region_files:
                         with open(chr_output_filename, 'r') as f_in:
                             for line in f_in:
-                                f.write(line)
+                                if line not in line_seen:
+                                    f.write(line)
+                                line_seen.add(line)
 
                 df_all_demux = pd.read_csv(REPORT_ALL_DEPTH, sep='\t')
                 df_all_demux.sort_values(by=['chr_id', 'start'], inplace=True)
@@ -1250,7 +1284,7 @@ def main():
             n_reads_aligned_genome = []
             fastq_region_filenames = []
 
-            if can_finish_incomplete_run and 'crispresso_amplicons_and_genome' in crispresso2_info['running_info']['finished_steps']:
+            if can_finish_incomplete_run and 'crispresso_amplicons_and_genome' in crispresso2_info['running_info']['finished_steps'] and False:
                 info('Using previously-computed crispresso runs')
                 (n_reads_aligned_genome, fastq_region_filenames, files_to_match) = crispresso2_info['running_info']['finished_steps']['crispresso_amplicons_and_genome'];
             else:
