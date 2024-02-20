@@ -332,6 +332,7 @@ def main():
         parser.add_argument('--limit_open_files_for_demux', help='If set, only one file will be opened during demultiplexing of read alignment locations. This will be slightly slower as the reads must be sorted, but may be necessary if the number of amplicons is greater than the number of files that can be opened due to OS constraints.', action='store_true')
         parser.add_argument('--aligned_pooled_bam', type=str, help='Path to aligned input for CRISPRessoPooled processing. If this parameter is specified, the alignments in the given bam will be used to demultiplex reads. If this parameter is not set (default), input reads provided by --fastq_r1 (and optionally --fastq_r2) will be aligned to the reference genome using bowtie2. If the input bam is given, the corresponding reference fasta must also be given to extract reference genomic sequences via the parameter --bowtie2_index. Note that if the aligned reads are paired-end sequenced, they should already be merged into 1 read (e.g. via Flash) before alignment.', default=None)
         parser.add_argument('--demultiplex_only_at_amplicons', help='If set, and an amplicon file (--amplicons_file) and reference sequence (--bowtie2_index) are provided, reads overlapping alignment positions of amplicons will be demultiplexed and assigned to that amplicon. If this flag is not set, the entire genome will be demultiplexed and reads with the same start and stop coordinates as an amplicon will be assigned to that amplicon.', action='store_true')
+        parser.add_argument('--no-multi-process', help='If set, do not use python multiprocessing', action='store_true')
 
         args = parser.parse_args()
 
@@ -1173,8 +1174,8 @@ def main():
                                         break
                                     n_reads_at_end = get_n_aligned_bam_region(bam_filename_genome, chr_str, curr_end-5, curr_end+5)
 
-                                sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, curr_end))
                                 chr_output_filename = _jp('MAPPED_REGIONS/%s_%s_%s.info' % (chr_str, curr_pos, curr_end))
+                                sub_chr_command = chr_cmd.replace("__REGION__", ":%d-%d "%(curr_pos, curr_end)).replace("__DEMUX_CHR_LOGFILENAME__",chr_output_filename)
                                 chr_commands.append(sub_chr_command)
                                 chr_output_filenames.append(chr_output_filename)
                                 curr_pos = curr_end
@@ -1192,14 +1193,21 @@ def main():
                             chr_commands.append(sub_chr_command)
                             chr_output_filenames.append(chr_output_filename)
 
-                if args.debug:
+                if args.debug or args.no-multi-process:
                     demux_file = _jp('DEMUX_COMMANDS.txt')
                     with open(demux_file, 'w') as fout:
                         fout.write("\n\n\n".join(chr_commands))
                     info('Wrote demultiplexing commands to ' + demux_file)
 
+
                 info('Demultiplexing reads by location (%d genomic regions)...'%len(chr_commands), {'percent_complete': 85})
-                CRISPRessoMultiProcessing.run_parallel_commands(chr_commands, n_processes=n_processes_for_pooled, descriptor='Demultiplexing reads by location', continue_on_fail=args.skip_failed)
+                if args.no-multi-process:
+                    info('Option set to not run with python multiprocessing, instead running directly from command line with "bash '+_jp('DEMUX_COMMANDS.txt')+'"')
+                    cmd = ['bash',_jp('DEMUX_COMMANDS.txt')]
+                    sb.call(cmd, shell=True)
+                else:
+                    info('Running with multi processing')
+                    CRISPRessoMultiProcessing.run_parallel_commands(chr_commands, n_processes=n_processes_for_pooled, descriptor='Demultiplexing reads by location', continue_on_fail=args.skip_failed)
 
                 with open(REPORT_ALL_DEPTH, 'w') as f:
                     f.write('chr_id\tstart\tend\tnumber of reads\toutput filename\n')
