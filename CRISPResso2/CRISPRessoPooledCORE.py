@@ -1201,7 +1201,7 @@ def main():
 
 
                 info('Demultiplexing reads by location (%d genomic regions)...'%len(chr_commands), {'percent_complete': 85})
-                if args.no-multi-process:
+                if args.no_multi_process:
                     info('Option set to not run with python multiprocessing, instead running directly from command line with "bash '+_jp('DEMUX_COMMANDS.txt')+'"')
                     cmd = ['bash',_jp('DEMUX_COMMANDS.txt')]
                     sb.call(cmd, shell=True)
