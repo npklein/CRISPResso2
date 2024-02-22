@@ -1202,9 +1202,10 @@ def main():
 
                 info('Demultiplexing reads by location (%d genomic regions)...'%len(chr_commands), {'percent_complete': 85})
                 if args.no_multi_process:
-                    info('Option set to not run with python multiprocessing, instead running directly from command line with "bash '+_jp('DEMUX_COMMANDS.txt')+'"')
-                    cmd = ['bash',_jp('DEMUX_COMMANDS.txt')]
-                    sb.call(cmd, shell=True)
+                    info('Option set to not run with python multiprocessing, instead running directly from command line"
+                    for cmd in chr_commands:
+                        info("Run: "+" | ".join(cmd))
+                        sb.run(cmd, shell=True)
                 else:
                     info('Running with multi processing')
                     CRISPRessoMultiProcessing.run_parallel_commands(chr_commands, n_processes=n_processes_for_pooled, descriptor='Demultiplexing reads by location', continue_on_fail=args.skip_failed)
