@@ -1204,7 +1204,7 @@ def main():
                 if args.no_multi_process:
                     info("Option set to not run with python multiprocessing, instead running directly from command line")
                     for cmd in chr_commands:
-                        info("Run: "+" | ".join(cmd))
+                        info("Run: "+cmd)
                         sb.run(cmd, shell=True)
                 else:
                     info('Running with multi processing')
