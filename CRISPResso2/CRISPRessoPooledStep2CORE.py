@@ -765,6 +765,15 @@ def main():
                         #else:
                              #info('Warning: Fastq filename ' + fastq_filename_region + ' is not in ' + str(files_to_match))
                              #debug here??
+                        try:
+                            N_READS >= args.min_reads_to_use_region and fastq_filename_region != ""
+                        except:
+                            print("N_READS:")
+                            print(N_READS)
+                            print("fastq_filename_region")
+                            print(fastq_filename_region)
+                            print('demux_row')
+                            print(demux_row)
                         if N_READS >= args.min_reads_to_use_region and fastq_filename_region != "":
                             info('\nThe amplicon [%s] has enough reads (%d) mapped to it! Running CRISPResso!\n' % (idx, N_READS))
 
