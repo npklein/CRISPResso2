@@ -56,6 +56,8 @@ def main():
           "console_scripts": [call_root+' = CRISPResso2.CRISPRessoCORE:main',
               call_root+'Batch = CRISPResso2.CRISPRessoBatchCORE:main',
               call_root+'Pooled = CRISPResso2.CRISPRessoPooledCORE:main',
+              call_root+'PooledStep1 = CRISPResso2.CRISPRessoPooledStep1CORE:main',
+              call_root+'PooledStep2 = CRISPResso2.CRISPRessoPooledStep2CORE:main',
               call_root+'WGS = CRISPResso2.CRISPRessoWGSCORE:main',
               call_root+'Compare = CRISPResso2.CRISPRessoCompareCORE:main',
               call_root+'PooledWGSCompare = CRISPResso2.CRISPRessoPooledWGSCompareCORE:main',

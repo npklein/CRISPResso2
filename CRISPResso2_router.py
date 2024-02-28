@@ -24,6 +24,10 @@ elif sys.argv[1]=='CRISPRessoCompare':
     sb.call(["CRISPRessoCompare"]+ sys.argv[2:])
 elif sys.argv[1]=='CRISPRessoPooled':
     sb.call(["CRISPRessoPooled"]+ sys.argv[2:])
+elif sys.argv[1]=='CRISPRessoPooledStep1':
+    sb.call(["CRISPRessoPooledStep1"]+ sys.argv[2:])
+elif sys.argv[1]=='CRISPRessoPooledStep2':
+    sb.call(["CRISPRessoPooledStep2"]+ sys.argv[2:])
 elif sys.argv[1]=='CRISPRessoWGS':
     sb.call(["CRISPRessoWGS"]+ sys.argv[2:])
 elif sys.argv[1]=='CRISPRessoPooledWGSCompare':

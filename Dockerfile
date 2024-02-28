@@ -37,7 +37,9 @@ RUN python setup.py install \
   && CRISPRessoBatch -h \
   && CRISPRessoPooled -h \
   && CRISPRessoWGS -h \
-  && CRISPRessoCompare -h
+  && CRISPRessoCompare -h \
+  && CRISPRessoPooledStep1 -h \
+  && CRISPRessoPooledStep2 -h
 
 
 ENTRYPOINT ["python","/CRISPResso2/CRISPResso2_router.py"]

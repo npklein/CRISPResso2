@@ -399,18 +399,16 @@ def main():
             CRISPRessoShared.check_file(args.gene_annotations)
 
         if args.amplicons_file and not args.bowtie2_index:
-            RUNNING_MODE='ONLY_AMPLICONS'
-            info('Only the Amplicon description file was provided. The analysis will be perfomed using only the provided amplicons sequences.')
+            raise NotImplementedError()
 
         elif args.bowtie2_index and not args.amplicons_file:
-            RUNNING_MODE='ONLY_GENOME'
-            info('Only the bowtie2 reference genome index file was provided. The analysis will be perfomed using only genomic regions where enough reads align.')
-        elif args.bowtie2_index and args.amplicons_file:
-            RUNNING_MODE='AMPLICONS_AND_GENOME'
-            info('Amplicon description file and bowtie2 reference genome index files provided. The analysis will be perfomed using the reads that are aligned only to the amplicons provided and not to other genomic regions.')
-        else:
-            error('Please provide the amplicons description file (-f or --amplicons_file option) or the bowtie2 reference genome index file (-x or --bowtie2_index option) or both.')
-            sys.exit(1)
+            raise NotImplementedError()
+#        elif args.bowtie2_index and args.amplicons_file:
+        RUNNING_MODE='AMPLICONS_AND_GENOME'
+#            info('Amplicon description file and bowtie2 reference genome index files provided. The analysis will be perfomed using the reads that are aligned only to the amplicons provided and not to other genomic regions.')
+#        else:
+#            error('Please provide the amplicons description file (-f or --amplicons_file option) or the bowtie2 reference genome index file (-x or --bowtie2_index option) or both.')
+#            sys.exit(1)
 
         if args.alternate_alleles:
             CRISPRessoShared.check_file(args.alternate_alleles)
@@ -492,7 +490,20 @@ def main():
         info('Processing input', {'percent_complete': 5})
 
 
-        (N_READS_INPUT, N_READS_AFTER_PREPROCESSING) = crispresso2_info['running_info']['finished_steps']['count_input_reads']
+        if can_finish_incomplete_run and 'count_input_reads' in crispresso2_info['running_info']['finished_steps']:
+            (N_READS_INPUT, N_READS_AFTER_PREPROCESSING) = crispresso2_info['running_info']['finished_steps']['count_input_reads']
+        # count reads
+        else:
+            if args.aligned_pooled_bam is not None:
+                N_READS_INPUT = get_n_reads_bam(args.aligned_pooled_bam)
+                N_READS_AFTER_PREPROCESSING = N_READS_INPUT
+            else:
+                raise NotImplementedError
+
+            crispresso2_info['running_info']['finished_steps']['count_input_reads'] = (N_READS_INPUT, N_READS_AFTER_PREPROCESSING)
+            CRISPRessoShared.write_crispresso_info(
+                crispresso2_info_file, crispresso2_info
+            )
 
         # load gene annotation
         if args.gene_annotations:
@@ -664,7 +675,28 @@ def main():
                 args.name, args.fastq_r1, args.fastq_r2, args.aligned_pooled_bam,
             )))
 
-            N_READS_ALIGNED = crispresso2_info['running_info']['finished_steps']['n_reads_aligned_genome']
+            if can_finish_incomplete_run and 'n_reads_aligned_genome' in crispresso2_info['running_info']['finished_steps']:
+                info('Using previously-computed alignment of reads to genome')
+                N_READS_ALIGNED = crispresso2_info['running_info']['finished_steps']['n_reads_aligned_genome']
+            # if aligned bam is provided, count reads aligned to genome
+            elif args.aligned_pooled_bam is not None:
+                def rreplace(s, old, new):
+                    li = s.rsplit(old)
+                    return new.join(li)
+                if os.path.exists(rreplace(args.aligned_pooled_bam, ".bam", ".bai")) or os.path.exists(args.aligned_pooled_bam+'.bai'):
+                    info('Index file for input .bam file exists, skipping generation.')
+                else:
+                    info('Index file for input .bam file does not exist. Generating bam index file.')
+                    sb.call('samtools index %s' % bam_filename_genome, shell=True)
+
+                N_READS_ALIGNED = get_n_aligned_bam(bam_filename_genome)
+                # save progress up to this point
+                crispresso2_info['running_info']['finished_steps']['n_reads_aligned_genome'] = N_READS_ALIGNED
+                CRISPRessoShared.write_crispresso_info(
+                    crispresso2_info_file, crispresso2_info,
+                )
+            else:
+                raise NotImplementedError
 
             MAPPED_REGIONS = _jp('MAPPED_REGIONS/')
             REPORT_ALL_DEPTH = _jp('REPORT_READS_ALIGNED_TO_GENOME_ALL_DEPTHS.txt')
@@ -785,6 +817,21 @@ def main():
                     df_regions = pd.read_csv(filename_problematic_regions, sep='\t')
                 else:
                     info('Reporting problematic regions...')
+                    uncompressed_reference=args.bowtie2_index+'.fa'
+
+                    if os.path.exists(uncompressed_reference):
+                        info('The uncompressed reference fasta file for %s is already present! Skipping generation.' % args.bowtie2_index)
+                    else:
+                        #uncompressed_reference=os.path.join(GENOME_LOCAL_FOLDER,'UNCOMPRESSED_REFERENCE_FROM_'+args.bowtie2_index.replace('/','_')+'.fa')
+                        info('Extracting uncompressed reference from the provided bowtie2 index since it is not available... Please be patient!')
+
+                        cmd_to_uncompress='bowtie2-inspect %s > %s 2>>%s' % (args.bowtie2_index, uncompressed_reference, log_filename)
+                        sb.call(cmd_to_uncompress, shell=True)
+
+                        info('Indexing fasta file with samtools...')
+                        #!samtools faidx {uncompressed_reference}
+                        sb.call('samtools faidx %s 2>>%s ' % (uncompressed_reference, log_filename), shell=True)
+
                     summarize_region_fastq_input = [f+" "+uncompressed_reference for f in files_to_match] #pass both params to parallel function
                     coordinates = CRISPRessoMultiProcessing.run_function_on_array_chunk_parallel(summarize_region_fastq_input, summarize_region_fastq_chunk, n_processes=n_processes_for_pooled)
                     df_regions = pd.DataFrame(coordinates, columns=['chr_id', 'bpstart', 'bpend', 'fastq_file', 'n_reads', 'Reference_sequence'])
